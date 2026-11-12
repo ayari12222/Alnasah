@@ -1,0 +1,16 @@
+name: Build Alnasih App
+on: [push, workflow_dispatch]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+      - run: flutter create --org com.alnasih --project-name alnasih_mesh .
+      - run: flutter pub add shared_preferences uuid flutter_blue_plus
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Alnasih-App-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          
