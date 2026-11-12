@@ -1,5 +1,8 @@
+
 name: Build Clean App
 on: [push, workflow_dispatch]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,10 +22,11 @@ jobs:
           find android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -exec sed -i 's/flutter.minSdkVersion/21/g' {} +
       - name: Build APK
         run: flutter build apk --release
-      - uses: actions/upload-artifact@v4
+      - name: Publish Direct Download Link
+        uses: softprops/action-gh-release@v2
         with:
-          name: Alnasih-App-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
-
+          tag_name: v1.0
+          name: تطبيق الناصح - النسخة الأولى
+          files: build/app/outputs/flutter-apk/app-release.apk
 
 
