@@ -6,11 +6,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
-      - run: flutter create --org com.alnasih --project-name alnasih_mesh .
-      - run: flutter pub add shared_preferences uuid flutter_blue_plus
-      - run: flutter build apk --release
+        with:
+          channel: 'stable'
+      - name: Clean old files and create project
+        run: |
+          mkdir -p temp_lib
+          cp -r lib/* temp_lib/ 2>/dev/null || true
+          rm -f pubspec.yaml pubspec.lock
+          flutter create --org com.alnasih --project-name alnasih_mesh .
+          cp -r temp_lib/* lib/ 2>/dev/null || true
+          rm -rf temp_lib
+      - name: Add Mesh Packages
+        run: flutter pub add shared_preferences uuid flutter_blue_plus
+      - name: Build Android APK
+        run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
           name: Alnasih-App-APK
           path: build/app/outputs/flutter-apk/app-release.apk
-          
+
+
