@@ -1,5 +1,5 @@
 
-name: Build Clean App
+name: Build Alnasih2 Arabic App
 on: [push, workflow_dispatch]
 permissions:
   contents: write
@@ -15,18 +15,239 @@ jobs:
         run: |
           rm -rf * .gitignore .metadata
           flutter create --org com.alnasih --project-name alnasih_mesh .
-      - name: Add Bluetooth & Storage
-        run: flutter pub add shared_preferences uuid flutter_blue_plus
-      - name: Fix Android SDK
+      - name: Add Mesh Packages
+        run: flutter pub add shared_preferences uuid flutter_blue_plus permission_handler
+      - name: Fix Android SDK & App Name
         run: |
           find android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -exec sed -i 's/flutter.minSdkVersion/21/g' {} +
-      - name: Build APK
-        run: flutter build apk --release
-      - name: Publish Direct Download Link
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0
-          name: تطبيق الناصح - النسخة الأولى
-          files: build/app/outputs/flutter-apk/app-release.apk
+          sed -i 's/android:label="alnasih_mesh"/android:label="الناصح2"/g' android/app/src/main/AndroidManifest.xml
+      - name: Write Arabic Mesh App Code
+        run: |
+          cat << 'EOF' > lib/main.dart
+          import 'dart:convert';
+          import 'package:flutter/material.dart';
+          import 'package:shared_preferences/shared_preferences.dart';
+          import 'package:uuid/uuid.dart';
+          import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
+          void main() {
+            runApp(const AlnasihMeshApp());
+          }
+
+          class AlnasihMeshApp extends StatelessWidget {
+            const AlnasihMeshApp({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                title: 'الناصح2',
+                debugShowCheckedModeBanner: false,
+                theme: ThemeData.dark().copyWith(
+                  primaryColor: Colors.redAccent,
+                  scaffoldBackgroundColor: const Color(0xFF121212),
+                ),
+                home: const Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: MeshHomeScreen(),
+                ),
+              );
+            }
+          }
+
+          class MeshMessage {
+            final String id;
+            final String sender;
+            final String text;
+            final int hops;
+            final String timestamp;
+
+            MeshMessage({
+              required this.id,
+              required this.sender,
+              required this.text,
+              required this.hops,
+              required this.timestamp,
+            });
+
+            Map<String, dynamic> toJson() => {
+                  'id': id,
+                  'sender': sender,
+                  'text': text,
+                  'hops': hops,
+                  'timestamp': timestamp,
+                };
+
+            factory MeshMessage.fromJson(Map<String, dynamic> json) => MeshMessage(
+                  id: json['id'],
+                  sender: json['sender'],
+                  text: json['text'],
+                  hops: json['hops'],
+                  timestamp: json['timestamp'],
+                );
+          }
+
+          class MeshHomeScreen extends StatefulWidget {
+            const MeshHomeScreen({super.key});
+
+            @override
+            State<MeshHomeScreen> createState() => _MeshHomeScreenState();
+          }
+
+          class _MeshHomeScreenState extends State<MeshHomeScreen> {
+            final TextEditingController _msgController = TextEditingController();
+            List<MeshMessage> _messages = [];
+            bool _isScanning = false;
+            int _nearbyPeers = 0;
+
+            @override
+            void initState() {
+              super.initState();
+              _loadStoredMessages();
+              _startBluetoothRadar();
+            }
+
+            Future<void> _startBluetoothRadar() async {
+              try {
+                setState(() => _isScanning = true);
+                FlutterBluePlus.scanResults.listen((results) {
+                  if (mounted) {
+                    setState(() {
+                      _nearbyPeers = results.length;
+                    });
+                  }
+                });
+                await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+              } catch (e) {
+                if (mounted) {
+                  setState(() => _isScanning = false);
+                }
+              }
+            }
+
+            Future<void> _loadStoredMessages() async {
+              final prefs = await SharedPreferences.getInstance();
+              final List<String> saved = prefs.getStringList('dtn_messages') ?? [];
+              setState(() {
+                _messages = saved
+                    .map((item) => MeshMessage.fromJson(jsonDecode(item)))
+                    .toList();
+              });
+            }
+
+            Future<void> _saveMessagesToDTN() async {
+              final prefs = await SharedPreferences.getInstance();
+              final List<String> encoded =
+                  _messages.map((msg) => jsonEncode(msg.toJson())).toList();
+              await prefs.setStringList('dtn_messages', encoded);
+            }
+
+            void _sendEmergencyMessage() {
+              if (_msgController.text.trim().isEmpty) return;
+
+              final now = DateTime.now();
+              final newMsg = MeshMessage(
+                id: const Uuid().v4(),
+                sender: 'أنت (جهاز محلي)',
+                text: _msgController.text.trim(),
+                hops: 1,
+                timestamp: '${now.hour}:${now.minute.toString().padLeft(2, '0')}',
+              );
+
+              setState(() {
+                _messages.insert(0, newMsg);
+                _msgController.clear();
+              });
+
+              _saveMessagesToDTN();
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('الناصح2'),
+                  backgroundColor: Colors.red.shade900,
+                  actions: [
+                    IconButton(
+                      icon: Icon(_isScanning ? Icons.radar : Icons.bluetooth_searching),
+                      onPressed: _startBluetoothRadar,
+                      tooltip: 'تحديث الرادار',
+                    ),
+                  ],
+                ),
+                body: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      color: _isScanning
+                          ? Colors.green.withOpacity(0.2)
+                          : Colors.orange.withOpacity(0.2),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _isScanning
+                                  ? '🟢 رادار البلوتوث نشط (بحث عن هواتف)'
+                                  : '🟠 وضع التخزين المؤقت (DTN)',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                          Text('الأجهزة المحيطة: $_nearbyPeers',
+                              style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: _messages.isEmpty
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(20.0),
+                                child: Text(
+                                  'مرحباً بك في الناصح2.\nاكتب رسالتك في الأسفل ليتم حفظها وتمريرها للأجهزة القريبة بدون إنترنت.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.grey, height: 1.5),
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              reverse: true,
+                              itemCount: _messages.length,
+                              itemBuilder: (context, index) {
+                                final msg = _messages[index];
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
+                                  color: const Color(0xFF1E1E1E),
+                                  child: ListTile(
+                                    title: Text(msg.text,
+                                        style: const TextStyle(fontSize: 16)),
+                                    subtitle: Text(
+                                      '${msg.sender} • القفزات: ${msg.hops}/64 • ${msg.timestamp}',
+                                      style: const TextStyle(
+                                          fontSize: 12, color: Colors.amber),
+                                    ),
+                                    leading: const Icon(Icons.cell_tower,
+                                        color: Colors.redAccent),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _msgController,
+                              decoration: InputDecoration(
+                                hintText: 'اكتب رسالة...',
+                                filled: true,
+                                fillColor: const Color(0xFF2A2A2A),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(25),
+                                  borderSide: BorderSide.none,
 
 
