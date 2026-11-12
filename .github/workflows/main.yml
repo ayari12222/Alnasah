@@ -1,4 +1,4 @@
-name: Build Alnasih App
+name: Build Clean App
 on: [push, workflow_dispatch]
 jobs:
   build:
@@ -8,23 +8,17 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-      - name: Setup Project Structure
+      - name: Create Clean Project
         run: |
-          mkdir -p temp_lib
-          cp -r lib/* temp_lib/ 2>/dev/null || true
-          rm -f pubspec.yaml pubspec.lock
+          rm -rf * .gitignore .metadata
           flutter create --org com.alnasih --project-name alnasih_mesh .
-          cp -r temp_lib/* lib/ 2>/dev/null || true
-          rm -rf temp_lib
-      - name: Fix Android SDK & Permissions
-        run: |
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle 2>/dev/null || true
-          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/g' android/app/build.gradle 2>/dev/null || true
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/g' android/app/build.gradle.kts 2>/dev/null || true
-      - name: Install Packages
+      - name: Add Bluetooth & Storage
         run: flutter pub add shared_preferences uuid flutter_blue_plus
-      - name: Build Android APK
-        run: flutter build apk --release --no-tree-shake-icons
+      - name: Fix Android SDK
+        run: |
+          find android -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -exec sed -i 's/flutter.minSdkVersion/21/g' {} +
+      - name: Build APK
+        run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
           name: Alnasih-App-APK
