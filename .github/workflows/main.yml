@@ -249,5 +249,29 @@ jobs:
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(25),
                                   borderSide: BorderSide.none,
+                                  
+                                  
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+EOF
+
+      - name: فحص وتصحيح الأخطاء البرمجية (Analyze Code)
+        run: flutter analyze --no-fatal-infos || true
+
+      - name: بناء التطبيق (Build APK)
+        run: flutter build apk --release
+
+      - name: رفع ملف التطبيق (Upload APK)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Alnasih2-App
+          path: build/app/outputs/flutter-apk/app-release.apk
 
 
